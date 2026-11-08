@@ -22,14 +22,37 @@ public class PaymentService {
         return paymentRepository.findByOrderId(orderId);
     }
 
+    // Méthode adaptée pour être compatible avec PaymentResource (reçoit un objet Payment)
+    public Payment createPayment(Payment payment) {
+        Optional<Payment> existing = paymentRepository.findByOrderId(payment.getOrderId());
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        // Utiliser getId() et setId()
+        if (payment.getId() == null || payment.getId().isEmpty()) {
+            String paymentId = "pay-" + UUID.randomUUID().toString().substring(0, 8);
+            payment.setId(paymentId);
+        }
+
+        if (payment.getStatus() == null || payment.getStatus().isEmpty()) {
+            payment.setStatus("SUCCESS");
+        }
+
+        if (payment.getCreatedAt() == null || payment.getCreatedAt().isEmpty()) {
+            payment.setCreatedAt(java.time.Instant.now().toString());
+        }
+
+        return paymentRepository.save(payment);
+    }
+
+    // Ancienne méthode conservée si vous l'utilisez ailleurs dans votre projet
     public Payment processPayment(String orderId, double amount, String method) {
-        // Check if payment already exists for this order
         Optional<Payment> existing = paymentRepository.findByOrderId(orderId);
         if (existing.isPresent()) {
             return existing.get();
         }
 
-        // Utiliser le montant passé en paramètre au lieu de 199.0
         String paymentId = "pay-" + UUID.randomUUID().toString().substring(0, 8);
         Payment payment = new Payment(paymentId, orderId, amount, method, "SUCCESS");
     

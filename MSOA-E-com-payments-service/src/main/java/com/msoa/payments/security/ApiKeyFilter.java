@@ -1,5 +1,8 @@
 package com.msoa.payments.security;
 
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.Priority;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Priorities;
@@ -9,36 +12,52 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.Provider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
+import javax.crypto.SecretKey;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 @Provider
 @Priority(Priorities.AUTHENTICATION)
 public class ApiKeyFilter implements ContainerRequestFilter {
 
     @Inject
-    @ConfigProperty(name = "msoa.internal.secret.key", defaultValue = "msoa_machine_to_machine_backend_authorization_secret_key_2026")
-    private String secretKey;
+    @ConfigProperty(name = "msoa.internal.secret.key", defaultValue = "ad43db4120d321f201527ffc71a66d9741756afa8b69fc8dab4ec784ff92287b")
+    private String secretKeyString;
 
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
-        // Optionnel : Vous pouvez désactiver le filtre pour GET /api/payments si vous voulez 
-        // que ce soit public, ou l'appliquer à tout le monde. 
-        // Ici, on vérifie l'en-tête "X-API-KEY" pour les communications inter-services.
-
-        String path = requestContext.getUriInfo().getPath();
-        
-        // Exemple : Exiger la clé uniquement sur les requêtes POST (création de paiement)
+        // Appliquer la sécurité sur les requêtes POST (création de paiement)
         if (requestContext.getMethod().equalsIgnoreCase("POST")) {
-            String clientKey = requestContext.getHeaderString("X-API-KEY");
+            String authHeader = requestContext.getHeaderString("Authorization");
 
-            if (clientKey == null || !clientKey.equals(secretKey)) {
-                requestContext.abortWith(
-                    Response.status(Response.Status.UNAUTHORIZED)
-                            .entity("{\"error\": \"Accès non autorisé - Clé M2M invalide ou manquante\"}")
-                            .type("application/json")
-                            .build()
-                );
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                abortWithUnauthorized(requestContext, "Token JWT manquant ou format invalide (Bearer requis)");
+                return;
+            }
+
+            String token = authHeader.substring("Bearer ".length());
+
+            try {
+                SecretKey key = Keys.hmacShaKeyFor(secretKeyString.getBytes(StandardCharsets.UTF_8));
+
+                // Valide le token avec HS256
+                Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token);
+
+            } catch (JwtException e) {
+                abortWithUnauthorized(requestContext, "Token JWT invalide ou signature incorrecte : " + e.getMessage());
             }
         }
+    }
+
+    private void abortWithUnauthorized(ContainerRequestContext requestContext, String message) {
+        requestContext.abortWith(
+            Response.status(Response.Status.UNAUTHORIZED)
+                    .entity("{\"error\": \"" + message + "\"}")
+                    .type("application/json")
+                    .build()
+        );
     }
 }
