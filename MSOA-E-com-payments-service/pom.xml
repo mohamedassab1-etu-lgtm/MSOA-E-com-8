@@ -30,6 +30,13 @@
     		<artifactId>sqlite-jdbc</artifactId>
     		<version>3.45.1.0</version>
 		</dependency>
+		
+		<dependency>
+    		<groupId>org.eclipse.microprofile.config</groupId>
+    		<artifactId>microprofile-config-api</artifactId>
+    		<version>3.0.3</version> <!-- Ou la version compatible avec votre version de Payara Micro -->
+    		<scope>provided</scope>
+		</dependency>
     </dependencies>
 
     <build>
