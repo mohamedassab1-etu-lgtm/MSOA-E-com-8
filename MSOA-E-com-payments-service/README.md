@@ -75,3 +75,17 @@ Pour compiler et lancer le service localement avec Maven et Payara Micro :
 mvn clean package
 java -jar target/payments-service-exec.jar --port 8085
 ```
+
+---
+
+## 🔒 Sécurité Machine-to-Machine (M2M)
+
+Les requêtes `POST` de ce microservice sont sécurisées par un filtre JAX-RS (`ApiKeyFilter`). Seuls les services internes autorisés (ex: `Orders`) peuvent effectuer des transactions.
+
+### Configuration du service client
+Pour appeler ce microservice, le service appelant doit inclure la clé d'autorisation dans ses en-têtes (Headers) HTTP :
+
+* **Header :** `X-API-KEY`
+* **Valeur :** `msoa_machine_to_machine_backend_authorization_secret_key_2026`
+
+> **Note :** En cas de clé manquante ou invalide, le service retournera une erreur HTTP `401 Unauthorized`.
