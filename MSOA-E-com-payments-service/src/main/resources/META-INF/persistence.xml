@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence version="3.0"
+             xmlns="https://jakarta.ee/xml/ns/persistence"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="https://jakarta.ee/xml/ns/persistence https://jakarta.ee/xml/ns/persistence/persistence_3_0.xsd">
+
+    <persistence-unit name="paymentsPU" transaction-type="RESOURCE_LOCAL">
+        <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
+        <class>com.msoa.payments.model.Payment</class>
+        
+        <properties>
+            <!-- SQLite JDBC Connection Configuration -->
+            <property name="jakarta.persistence.jdbc.driver" value="org.sqlite.JDBC"/>
+            <property name="jakarta.persistence.jdbc.url" value="jdbc:sqlite:payments.db"/>
+            
+            <!-- Schema generation: none or create (since leader provided schema/seed) -->
+            <property name="jakarta.persistence.schema-generation.database.action" value="none"/>
+        </properties>
+    </persistence-unit>
+
+</persistence>
