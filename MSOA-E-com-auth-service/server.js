@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
@@ -5,8 +7,12 @@ const jwt = require("jsonwebtoken");
 const Database = require("better-sqlite3");
 const { randomUUID } = require("crypto");
 
-const PORT = 8081;
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
+const PORT = process.env.PORT || 8081;
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error("JWT_SECRET manquant : créez un fichier .env (voir .env.example)");
+  process.exit(1);
+}
 
 // ---------- Base de données (créée automatiquement) ----------
 const db = new Database("auth.db");
@@ -29,6 +35,8 @@ if (!db.prepare("SELECT 1 FROM users WHERE email = ?").get("demo@msoa.shop")) {
 }
 
 // ---------- Helpers ----------
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const findByEmail = (email) =>
   db.prepare("SELECT * FROM users WHERE lower(email) = lower(?)").get(email);
 const findById = (id) => db.prepare("SELECT * FROM users WHERE id = ?").get(id);
@@ -62,15 +70,29 @@ app.use(express.json());
 
 app.post("/api/auth/register", async (req, res) => {
   const { name, email, password } = req.body || {};
-  if (!name || !email || !password || password.length < 6)
-    return res.status(400).json({ message: "Données invalides (mot de passe min. 6 caractères)" });
-  if (findByEmail(email))
+
+  if (typeof name !== "string" || typeof email !== "string" || typeof password !== "string")
+    return res.status(400).json({ message: "Nom, email et mot de passe requis" });
+
+  const cleanName = name.trim();
+  const cleanEmail = email.trim().toLowerCase();
+
+  if (!cleanName || !cleanEmail || !password)
+    return res.status(400).json({ message: "Nom, email et mot de passe ne doivent pas être vides" });
+
+  if (!EMAIL_REGEX.test(cleanEmail))
+    return res.status(400).json({ message: "Format d'email invalide" });
+
+  if (password.length < 6 || Buffer.byteLength(password, "utf8") > 72)
+    return res.status(400).json({ message: "Mot de passe invalide (entre 6 et 72 caractères)" });
+
+  if (findByEmail(cleanEmail))
     return res.status(409).json({ message: "Email déjà utilisé" });
 
   const user = {
     id: `user-${randomUUID().slice(0, 8)}`,
-    name,
-    email: email.toLowerCase(),
+    name: cleanName,
+    email: cleanEmail,
     password_hash: await bcrypt.hash(password, 10),
     role: "CUSTOMER",
     created_at: new Date().toISOString(),
@@ -78,16 +100,19 @@ app.post("/api/auth/register", async (req, res) => {
   db.prepare(
     "INSERT INTO users (id, name, email, password_hash, role, created_at) VALUES (@id, @name, @email, @password_hash, @role, @created_at)"
   ).run(user);
-  res.status(201).json({ user: publicUser(user), token: signToken(user) });
+
+  res.status(201).json({ user: publicUser(user) });
 });
 
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body || {};
-  if (!email || !password)
+  if (typeof email !== "string" || typeof password !== "string" || !email.trim() || !password)
     return res.status(400).json({ message: "Email et mot de passe requis" });
-  const user = findByEmail(email);
+
+  const user = findByEmail(email.trim());
   if (!user || !(await bcrypt.compare(password, user.password_hash)))
     return res.status(401).json({ message: "Email ou mot de passe incorrect" });
+
   res.json({ user: publicUser(user), token: signToken(user) });
 });
 
