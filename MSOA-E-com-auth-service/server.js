@@ -9,6 +9,10 @@ const { randomUUID } = require("crypto");
 
 const PORT = process.env.PORT || 8081;
 const JWT_SECRET = process.env.JWT_SECRET;
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "2h";
+const DB_FILE = process.env.DB_FILE || "auth.db";
+
 if (!JWT_SECRET) {
   console.error("JWT_SECRET manquant : créez un fichier .env (voir .env.example)");
   process.exit(1);
@@ -43,7 +47,7 @@ const findById = (id) => db.prepare("SELECT * FROM users WHERE id = ?").get(id);
 
 const publicUser = (u) => ({ id: u.id, name: u.name, email: u.email, role: u.role });
 const signToken = (u) =>
-  jwt.sign({ sub: u.id, email: u.email, role: u.role }, JWT_SECRET, { expiresIn: "2h" });
+  jwt.sign({ sub: u.id, email: u.email, role: u.role }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
 const revokedTokens = new Set();
 const getToken = (req) => {
@@ -65,7 +69,7 @@ const requireAuth = (req, res, next) => {
 
 // ---------- App ----------
 const app = express();
-app.use(cors({ origin: "http://localhost:5173" }));
+app.use(cors({ origin: FRONTEND_URL }));
 app.use(express.json());
 
 app.post("/api/auth/register", async (req, res) => {
