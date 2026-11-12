@@ -1,11 +1,11 @@
 
 const BACKEND_MODE = {
-  AUTH: "mock",
-  CATALOG: "mock",
-  INVENTORY: "mock",
-  ORDERS: "mock",
+  AUTH: "rest",
+  CATALOG: "rest",
+  INVENTORY: "rest",
+  ORDERS: "rest",
   PAYMENTS: "rest",
-  SHIPPING: "mock",
+  SHIPPING: "rest",
 };
 
 const API_URLS = {
