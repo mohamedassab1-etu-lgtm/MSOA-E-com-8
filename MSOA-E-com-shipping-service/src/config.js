@@ -6,7 +6,7 @@ const ALLOWED_ORIGINS = (process.env.FRONTEND_ORIGIN || 'http://localhost:5173,h
 module.exports = {
     serviceName: 'shipping',
     port: Number(process.env.PORT) || 8086,
-    host: process.env.HOST || '127.0.0.1',
+    host: process.env.HOST || '0.0.0.0',
     jwtSecret: process.env.JWT_SECRET,
     ordersUrl: process.env.ORDERS_URL || 'http://localhost:8084',
     requestTimeoutMs: 5000,

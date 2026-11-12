@@ -109,8 +109,8 @@ function createApp({ repo }) {
 
         try {
             await repo.insert({
-                id: shipmentId, orderId, userId: order.userId, 
-                recipientName: order.customer.name, address: order.customer.address, city: order.customer.city, 
+                id: shipmentId, orderId, userId: order.userId,
+                recipientName: order.customer.name, address: order.customer.address, city: order.customer.city,
                 trackingNumber: tracking, now
             });
         } catch (e) {
@@ -134,7 +134,7 @@ function createApp({ repo }) {
         const prev = shipment.status;
         const nowStr = new Date().toISOString();
         const cas = await repo.compareAndSetStatus(shipmentId, status, prev, nowStr);
-        
+
         if (cas.changes === 0) throw new HttpError(409, 'Shipment status changed concurrently, please retry');
 
         if (SYNCED_TO_ORDER.includes(status)) {
