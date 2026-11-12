@@ -58,4 +58,8 @@ public class PaymentService {
     
         return paymentRepository.save(payment);
     }
+
+    public void markAsFailed(String id) {
+        paymentRepository.updateStatus(id, "FAILED");
+    }
 }

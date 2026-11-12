@@ -8,6 +8,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.io.StringReader;
 import java.net.URI;
@@ -25,10 +26,11 @@ public class PaymentResource {
     @Inject
     private PaymentService paymentService;
 
+    @Inject
+    @ConfigProperty(name = "orders.service.url", defaultValue = "http://localhost:8084/api/orders")
+    private String ordersServiceUrl;
+
     private final HttpClient httpClient = HttpClient.newHttpClient();
-    
-    // URL officielle du service Orders
-    private static final String ORDERS_SERVICE_URL = "http://localhost:8084/api/orders";
 
     // Récupérer tous les paiements
     @GET
@@ -52,7 +54,7 @@ public class PaymentResource {
 
     // Créer un paiement avec intégration réelle Orders-Service
     @POST
-    public Response createPayment(Payment payment, @HeaderParam("Authorization") String authHeader) {
+    public Response createPayment(Payment payment) {
         try {
             if (payment == null || payment.getOrderId() == null) {
                 return Response.status(Response.Status.BAD_REQUEST)
@@ -62,10 +64,10 @@ public class PaymentResource {
 
             String orderId = payment.getOrderId();
 
-            // 1. VÉRIFIER LA COMMANDE AUPRES DU SERVICE ORDERS : GET /api/orders/{id}
+            // 1. VÉRIFIER LA COMMANDE
             HttpRequest checkRequest = HttpRequest.newBuilder()
-                    .uri(URI.create(ORDERS_SERVICE_URL + "/" + orderId))
-                    .header("Authorization", authHeader) // Transmission du token JWT M2M
+                    .uri(URI.create(ordersServiceUrl + "/" + orderId))
+                    .header("Content-Type", "application/json")
                     .GET()
                     .build();
 
@@ -73,11 +75,10 @@ public class PaymentResource {
 
             if (checkResponse.statusCode() != 200) {
                 return Response.status(Response.Status.BAD_REQUEST)
-                        .entity("{\"error\": \"Order not found or inaccessible on orders-service\"}")
+                        .entity("{\"error\": \"Order not found or inaccessible\"}")
                         .build();
             }
 
-            // Parser le JSON pour vérifier si le statut est PENDING_PAYMENT
             JsonObject orderJson = Json.createReader(new StringReader(checkResponse.body())).readObject();
             String status = orderJson.getString("status", "");
 
@@ -87,22 +88,25 @@ public class PaymentResource {
                         .build();
             }
 
-            // 2. ENREGISTRER LE PAIEMENT DANS LA BASE SQLITE LOCALE
+            // 2. ENREGISTRER LE PAIEMENT (Local DB)
             Payment createdPayment = paymentService.createPayment(payment);
 
-            // 3. METTRE A JOUR LE STATUT DE LA COMMANDE À "PAID" : PATCH /api/orders/{id}/status
+            // 3. METTRE A JOUR LE STATUT DE LA COMMANDE À "PAID"
             String patchBody = "{\"status\":\"PAID\"}";
             HttpRequest patchRequest = HttpRequest.newBuilder()
-                    .uri(URI.create(ORDERS_SERVICE_URL + "/" + orderId + "/status"))
-                    .header("Authorization", authHeader)
+                    .uri(URI.create(ordersServiceUrl + "/" + orderId + "/status"))
                     .header("Content-Type", "application/json")
                     .method("PATCH", HttpRequest.BodyPublishers.ofString(patchBody))
                     .build();
 
             HttpResponse<String> patchResponse = httpClient.send(patchRequest, HttpResponse.BodyHandlers.ofString());
 
+            // If the external call fails, we compensate by marking the payment as FAILED
             if (patchResponse.statusCode() != 200 && patchResponse.statusCode() != 204) {
-                System.err.println("Warning: Failed to update order status to PAID on orders-service");
+                paymentService.markAsFailed(createdPayment.getId());
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                        .entity("{\"error\": \"Payment recorded, but failed to update order to PAID. Payment marked as FAILED.\"}")
+                        .build();
             }
 
             return Response.status(Response.Status.CREATED).entity(createdPayment).build();
