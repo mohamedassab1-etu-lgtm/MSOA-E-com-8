@@ -3,7 +3,21 @@ const cors = require("cors");
 const repo = require("./inventoryRepository");
 
 const app = express();
-app.use(cors());
+
+const allowedOrigins = [
+  process.env.FRONTEND_URL || "http://localhost:5173",
+  process.env.ORDERS_SERVICE_URL || "http://localhost:8084" 
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (allowedOrigins.indexOf(origin) === -1) {
+      var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  }
+}));
 app.use(express.json());
 
 app.get("/health", (req, res) => res.json({ status: "UP", service: "inventory" }));
