@@ -29,7 +29,7 @@ function createApp({ orderService, frontendOrigin }) {
   }));
 
   app.post("/api/orders/:id/cancel", wrap(async (req, res) => {
-    res.json(await orderService.cancel(req.params.id));
+    res.json(await orderService.cancel(req.params.id, req.headers.authorization));
   }));
 
   app.use((_req, _res, next) => next(new HttpError(404, "Route introuvable.")));

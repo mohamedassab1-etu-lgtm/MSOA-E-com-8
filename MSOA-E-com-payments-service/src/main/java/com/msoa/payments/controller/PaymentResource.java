@@ -32,6 +32,11 @@ public class PaymentResource {
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
+    private Response error(Response.Status status, String message) {
+        String body = Json.createObjectBuilder().add("message", message).build().toString();
+        return Response.status(status).entity(body).build();
+    }
+
     // Récupérer tous les paiements
     @GET
     public Response getAllPayments() {
@@ -43,78 +48,64 @@ public class PaymentResource {
     @GET
     @Path("order/{orderId}")
     public Response getPaymentById(@PathParam("orderId") String orderId) {
-        Optional<Payment> payment = paymentService.getPaymentByOrderId(orderId);
-        if (payment.isPresent()) {
-            return Response.ok(payment.get()).build();
-        }
-        return Response.status(Response.Status.NOT_FOUND)
-                .entity("{\"error\": \"Payment not found with id: " + orderId + "\"}")
-                .build();
+        return paymentService.getPaymentByOrderId(orderId)
+                .map(p -> Response.ok(p).build())
+                .orElseGet(() -> error(Response.Status.NOT_FOUND, "Payment not found for order " + orderId));
     }
 
     // Créer un paiement avec intégration réelle Orders-Service
     @POST
     public Response createPayment(Payment payment) {
         try {
-            if (payment == null || payment.getOrderId() == null) {
-                return Response.status(Response.Status.BAD_REQUEST)
-                        .entity("{\"error\": \"Invalid payment data or missing orderId\"}")
-                        .build();
+            if (payment == null || payment.getOrderId() == null || payment.getOrderId().isBlank()) {
+                return error(Response.Status.BAD_REQUEST, "orderId is required");
             }
-
+            String method = payment.getMethod() == null ? "CARD" : payment.getMethod().toUpperCase();
+            if (!List.of("CARD", "CASH").contains(method)) {
+                return error(Response.Status.BAD_REQUEST, "Invalid payment method");
+            }
             String orderId = payment.getOrderId();
 
-            // 1. VÉRIFIER LA COMMANDE
+            // 1. Verify the order
             HttpRequest checkRequest = HttpRequest.newBuilder()
                     .uri(URI.create(ordersServiceUrl + "/" + orderId))
-                    .header("Content-Type", "application/json")
-                    .GET()
-                    .build();
-
+                    .GET().build();
             HttpResponse<String> checkResponse = httpClient.send(checkRequest, HttpResponse.BodyHandlers.ofString());
 
-            if (checkResponse.statusCode() != 200) {
-                return Response.status(Response.Status.BAD_REQUEST)
-                        .entity("{\"error\": \"Order not found or inaccessible\"}")
-                        .build();
-            }
+            if (checkResponse.statusCode() == 404)
+                return error(Response.Status.NOT_FOUND, "Order not found");
+            if (checkResponse.statusCode() != 200)
+                return error(Response.Status.BAD_GATEWAY, "Orders service error");
 
-            JsonObject orderJson = Json.createReader(new StringReader(checkResponse.body())).readObject();
-            String status = orderJson.getString("status", "");
-
+            JsonObject order = Json.createReader(new StringReader(checkResponse.body())).readObject();
+            String status = order.getString("status", "");
             if (!"PENDING_PAYMENT".equals(status)) {
-                return Response.status(Response.Status.BAD_REQUEST)
-                        .entity("{\"error\": \"Order status is not PENDING_PAYMENT. Current status: " + status + "\"}")
-                        .build();
+                return error(Response.Status.CONFLICT, "Order is not awaiting payment (status: " + status + ")");
             }
 
-            // 2. ENREGISTRER LE PAIEMENT (Local DB)
-            Payment createdPayment = paymentService.createPayment(payment);
+            // 2. Server-side values only: ignore anything the client sent
+            Payment toSave = new Payment();
+            toSave.setOrderId(orderId);
+            toSave.setAmount(order.getJsonNumber("total").doubleValue());
+            toSave.setMethod(method);
+            Payment created = paymentService.createPayment(toSave);
 
-            // 3. METTRE A JOUR LE STATUT DE LA COMMANDE À "PAID"
-            String patchBody = "{\"status\":\"PAID\"}";
-            HttpRequest patchRequest = HttpRequest.newBuilder()
+            // 3. Mark the order PAID
+            HttpRequest patch = HttpRequest.newBuilder()
                     .uri(URI.create(ordersServiceUrl + "/" + orderId + "/status"))
                     .header("Content-Type", "application/json")
-                    .method("PATCH", HttpRequest.BodyPublishers.ofString(patchBody))
+                    .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"status\":\"PAID\"}"))
                     .build();
+            HttpResponse<String> patchResponse = httpClient.send(patch, HttpResponse.BodyHandlers.ofString());
 
-            HttpResponse<String> patchResponse = httpClient.send(patchRequest, HttpResponse.BodyHandlers.ofString());
-
-            // If the external call fails, we compensate by marking the payment as FAILED
             if (patchResponse.statusCode() != 200 && patchResponse.statusCode() != 204) {
-                paymentService.markAsFailed(createdPayment.getId());
-                return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                        .entity("{\"error\": \"Payment recorded, but failed to update order to PAID. Payment marked as FAILED.\"}")
-                        .build();
+                paymentService.markAsFailed(created.getId());
+                return error(Response.Status.BAD_GATEWAY, "Could not update order to PAID. Payment marked FAILED.");
             }
-
-            return Response.status(Response.Status.CREATED).entity(createdPayment).build();
+            return Response.status(Response.Status.CREATED).entity(created).build();
 
         } catch (Exception e) {
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity("{\"error\": \"" + e.getMessage() + "\"}")
-                    .build();
+            return error(Response.Status.INTERNAL_SERVER_ERROR, "Internal error: " + e.getMessage());
         }
     }
 }

@@ -1,12 +1,12 @@
 const { HttpError } = require("../errors");
 
 // Appel HTTP avec timeout. Une panne réseau => 503 (service indisponible).
-async function callJson(baseUrl, path, { method = "GET", body, timeoutMs }) {
+async function callJson(baseUrl, path, { method = "GET", body, headers = {}, timeoutMs }) {
   let response;
   try {
     response = await fetch(`${baseUrl}${path}`, {
       method,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...headers },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(timeoutMs),
     });
