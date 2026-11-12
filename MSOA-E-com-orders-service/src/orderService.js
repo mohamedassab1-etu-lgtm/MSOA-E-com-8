@@ -91,7 +91,7 @@ function createOrderService({ repo, catalog, inventory, shipping }) {
           createdAt: new Date().toISOString(),
         });
       } catch (err) {
-        await inventory.release(toReserve).catch(() => {});
+        await inventory.release(toReserve).catch(() => { });
         throw err;
       }
     },
@@ -104,30 +104,28 @@ function createOrderService({ repo, catalog, inventory, shipping }) {
       }
 
       const order = this.get(id);
+      if (order.status === status) return order;   // idempotent: Shipping + frontend both PATCH
+
       if (!TRANSITIONS[order.status].includes(status)) {
         throw new HttpError(409, `Invalid transition: ${order.status} → ${status}`);
       }
-      // Mise à jour conditionnelle : protège contre deux requêtes simultanées
       if (!repo.setStatusIf(id, order.status, status)) {
         throw new HttpError(409, "La commande a été modifiée entre-temps, réessayez.");
       }
       return repo.findById(id);
     },
 
-    async cancel(id) {
+    async cancel(id, authorization) {
       const order = this.get(id);
-
       if (!CANCELLABLE.includes(order.status)) {
         throw new HttpError(409, "This order cannot be cancelled.");
       }
 
-      // Règle métier : une commande déjà expédiée ne peut plus être annulée
-      const shipment = await shipping.getShipmentByOrder(id);
+      const shipment = await shipping.getShipmentByOrder(id, authorization);
       if (shipment && !["PREPARING", "CANCELLED"].includes(shipment.status)) {
         throw new HttpError(409, "Cannot cancel an order that has already been shipped.");
       }
 
-      // On verrouille l'état AVANT de libérer le stock (évite une double libération)
       if (!repo.setStatusIf(id, order.status, "CANCELLED")) {
         throw new HttpError(409, "This order cannot be cancelled.");
       }
@@ -135,8 +133,14 @@ function createOrderService({ repo, catalog, inventory, shipping }) {
       try {
         await inventory.release(order.items.map(({ productId, quantity }) => ({ productId, quantity })));
       } catch (err) {
-        repo.setStatusIf(id, "CANCELLED", order.status); // rollback : stock non restauré
+        repo.setStatusIf(id, "CANCELLED", order.status);
         throw err;
+      }
+
+      // Keep Shipping consistent (best effort)
+      if (shipment && shipment.status === "PREPARING") {
+        await shipping.cancelShipment(shipment.id, authorization)
+          .catch((e) => console.error(`[Orders] shipment ${shipment.id} not cancelled: ${e.message}`));
       }
 
       return repo.findById(id);

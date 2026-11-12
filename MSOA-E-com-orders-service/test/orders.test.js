@@ -84,7 +84,7 @@ test("transitions : PENDING_PAYMENT → PAID → SHIPPED → DELIVERED, le reste
 
   assert.equal((await patch("SHIPPED")).status, 409); // saute PAID
   assert.equal((await patch("PAID")).body.status, "PAID");
-  assert.equal((await patch("PAID")).status, 409);
+  assert.equal((await patch("PAID")).status, 200);
   assert.equal((await patch("SHIPPED")).body.status, "SHIPPED");
   assert.equal((await patch("DELIVERED")).body.status, "DELIVERED");
   assert.equal((await patch("BIDON")).status, 400);
