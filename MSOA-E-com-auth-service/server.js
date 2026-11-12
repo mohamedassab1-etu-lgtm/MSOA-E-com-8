@@ -19,7 +19,7 @@ if (!JWT_SECRET) {
 }
 
 // ---------- Base de données (créée automatiquement) ----------
-const db = new Database("auth.db");
+const db = new Database(DB_FILE);
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
