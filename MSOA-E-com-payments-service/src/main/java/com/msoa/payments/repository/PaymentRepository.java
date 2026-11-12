@@ -4,6 +4,9 @@ import com.msoa.payments.model.Payment;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +26,16 @@ public class PaymentRepository {
         } catch (ClassNotFoundException e) {
             throw new RuntimeException("SQLite JDBC Driver not found", e);
         }
+        new java.io.File("data").mkdirs();
+        try (Connection conn = getConnection(); Statement st = conn.createStatement()) {
+            st.execute("CREATE TABLE IF NOT EXISTS payments ("
+                    + "id TEXT PRIMARY KEY, order_id TEXT NOT NULL UNIQUE, "
+                    + "amount REAL NOT NULL CHECK(amount >= 0), method TEXT NOT NULL, "
+                    + "status TEXT NOT NULL CHECK(status IN ('SUCCESS','FAILED','PENDING','REFUNDED')), "
+                    + "created_at TEXT NOT NULL)");
+        } catch (SQLException e) {
+            throw new RuntimeException("Cannot initialise payments table", e);
+        }
     }
 
     private Connection getConnection() throws SQLException {
@@ -34,8 +47,8 @@ public class PaymentRepository {
         String sql = "SELECT id, order_id, amount, method, status, created_at FROM payments";
 
         try (Connection conn = getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+                Statement stmt = conn.createStatement();
+                ResultSet rs = stmt.executeQuery(sql)) {
 
             while (rs.next()) {
                 payments.add(new Payment(
@@ -43,8 +56,7 @@ public class PaymentRepository {
                         rs.getString("order_id"),
                         rs.getDouble("amount"),
                         rs.getString("method"),
-                        rs.getString("status")
-                ));
+                        rs.getString("status")));
                 payments.get(payments.size() - 1).setCreatedAt(rs.getString("created_at"));
             }
         } catch (SQLException e) {
@@ -57,7 +69,7 @@ public class PaymentRepository {
         String sql = "SELECT id, order_id, amount, method, status, created_at FROM payments WHERE order_id = ?";
 
         try (Connection conn = getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setString(1, orderId);
             try (ResultSet rs = pstmt.executeQuery()) {
@@ -67,8 +79,7 @@ public class PaymentRepository {
                             rs.getString("order_id"),
                             rs.getDouble("amount"),
                             rs.getString("method"),
-                            rs.getString("status")
-                    );
+                            rs.getString("status"));
                     payment.setCreatedAt(rs.getString("created_at"));
                     return Optional.of(payment);
                 }
@@ -82,7 +93,7 @@ public class PaymentRepository {
     public void updateStatus(String id, String status) {
         String sql = "UPDATE payments SET status = ? WHERE id = ?";
         try (Connection conn = getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, status);
             pstmt.setString(2, id);
             pstmt.executeUpdate();
@@ -95,7 +106,7 @@ public class PaymentRepository {
         String sql = "INSERT INTO payments (id, order_id, amount, method, status, created_at) VALUES (?, ?, ?, ?, ?, ?)";
 
         try (Connection conn = getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setString(1, payment.getId());
             pstmt.setString(2, payment.getOrderId());

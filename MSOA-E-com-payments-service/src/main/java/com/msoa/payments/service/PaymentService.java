@@ -26,7 +26,12 @@ public class PaymentService {
     public Payment createPayment(Payment payment) {
         Optional<Payment> existing = paymentRepository.findByOrderId(payment.getOrderId());
         if (existing.isPresent()) {
-            return existing.get();
+            Payment p = existing.get();
+            if ("FAILED".equals(p.getStatus())) {
+                paymentRepository.updateStatus(p.getId(), "SUCCESS");
+                p.setStatus("SUCCESS");
+            }
+            return p;
         }
 
         // Utiliser getId() et setId()
@@ -55,7 +60,7 @@ public class PaymentService {
 
         String paymentId = "pay-" + UUID.randomUUID().toString().substring(0, 8);
         Payment payment = new Payment(paymentId, orderId, amount, method, "SUCCESS");
-    
+
         return paymentRepository.save(payment);
     }
 
