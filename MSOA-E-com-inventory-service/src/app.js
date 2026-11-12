@@ -11,6 +11,7 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) === -1) {
       var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
       return callback(new Error(msg), false);
@@ -22,26 +23,45 @@ app.use(express.json());
 
 app.get("/health", (req, res) => res.json({ status: "UP", service: "inventory" }));
 
-app.get("/api/inventory/:productId", (req, res) => {
-  const productId = Number(req.params.productId);
-  if (!Number.isInteger(productId)) {
-    throw new repo.HttpError(400, "Invalid productId.");
+app.get("/api/inventory/:productId", async (req, res, next) => {
+  try {
+    const productId = Number(req.params.productId);
+    if (!Number.isInteger(productId)) {
+      throw new repo.HttpError(400, "Invalid productId.");
+    }
+    const stock = await repo.getStock(productId);
+    if (stock === null) throw new repo.HttpError(404, `Unknown product: ${productId}`);
+    res.json({ productId, stock });
+  } catch (err) {
+    next(err);
   }
-  const stock = repo.getStock(productId);
-  if (stock === null) throw new repo.HttpError(404, `Unknown product: ${productId}`);
-  res.json({ productId, stock });
 });
 
-app.post("/api/inventory/check", (req, res) => {
-  res.json({ available: repo.checkAvailability(req.body?.items) });
+app.post("/api/inventory/check", async (req, res, next) => {
+  try {
+    const available = await repo.checkAvailability(req.body?.items);
+    res.json({ available });
+  } catch (err) {
+    next(err);
+  }
 });
 
-app.post("/api/inventory/reserve", (req, res) => {
-  res.json(repo.reserve(req.body?.items));
+app.post("/api/inventory/reserve", async (req, res, next) => {
+  try {
+    const result = await repo.reserve(req.body?.items);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
 });
 
-app.post("/api/inventory/release", (req, res) => {
-  res.json(repo.release(req.body?.items));
+app.post("/api/inventory/release", async (req, res, next) => {
+  try {
+    const result = await repo.release(req.body?.items);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
 });
 
 app.use((err, req, res, next) => {
