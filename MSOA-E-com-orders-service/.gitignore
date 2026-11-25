@@ -1,3 +1,9 @@
 node_modules
 .env
-data/*.db
+# Local SQLite databases
+data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
