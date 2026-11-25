@@ -6,6 +6,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const Database = require("better-sqlite3");
 const { randomUUID } = require("crypto");
+const { publishUserEvent } = require("./events");
 
 const PORT = process.env.PORT || 8081;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -105,6 +106,7 @@ app.post("/api/auth/register", async (req, res) => {
     "INSERT INTO users (id, name, email, password_hash, role, created_at) VALUES (@id, @name, @email, @password_hash, @role, @created_at)"
   ).run(user);
 
+  publishUserEvent("UserRegistered", user);
   res.status(201).json({ user: publicUser(user) });
 });
 
@@ -117,6 +119,7 @@ app.post("/api/auth/login", async (req, res) => {
   if (!user || !(await bcrypt.compare(password, user.password_hash)))
     return res.status(401).json({ message: "Email ou mot de passe incorrect" });
 
+  publishUserEvent("UserLoggedIn", user);
   res.json({ user: publicUser(user), token: signToken(user) });
 });
 
