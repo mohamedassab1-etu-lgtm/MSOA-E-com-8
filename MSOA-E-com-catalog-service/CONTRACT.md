@@ -203,6 +203,34 @@ curl http://localhost:8082/products/abc   # 400
 
 ---
 
+## 8. Published events
+
+When `GET /products/{id}` returns `200 OK`, Catalog asynchronously publishes one event to the Kafka topic `catalog-events`. The Kafka message key is the product id as a string. No event is published for an invalid id or a product that does not exist.
+
+The broker must be available at `localhost:9092` and the topic must exist. Publication can be disabled with `catalog.kafka.enabled=false`. Kafka publication failures are logged and do not change the HTTP response.
+
+### `ProductViewed` event
+
+| Field | Type | Description |
+|---|---|---|
+| `eventId` | string | Unique UUID for this event |
+| `type` | string | Always `ProductViewed` |
+| `source` | string | Always `catalog` |
+| `timestamp` | string | Event time in ISO 8601 UTC format |
+| `data.productId` | integer | Identifier of the viewed product |
+
+```json
+{
+  "eventId": "c1fd7aaa-28f8-44b7-9ca4-1025e9017ed1",
+  "type": "ProductViewed",
+  "source": "catalog",
+  "timestamp": "2026-11-25T18:30:00Z",
+  "data": {
+    "productId": 1
+  }
+}
+```
+
 ## 9. Notes and known limitations
 
 - The `image` field contains **external URLs** (set by `update-images.sql`), so an Internet connection is needed to display the images.

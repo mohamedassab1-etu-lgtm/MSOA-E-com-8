@@ -7,15 +7,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.msoa.catalog.event.CatalogEventPublisher;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -26,6 +30,9 @@ class ProductControllerTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @MockBean
+    private CatalogEventPublisher catalogEventPublisher;
 
     @Test
     void listsProductsInIdOrder() throws Exception {
@@ -51,6 +58,7 @@ class ProductControllerTest {
 
         org.assertj.core.api.Assertions.assertThat(fields)
                 .containsExactlyInAnyOrder("id", "name", "category", "price", "image", "description");
+        verify(catalogEventPublisher).publishProductViewed(1L);
     }
 
     @Test
@@ -60,6 +68,7 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.error").value("Not Found"))
                 .andExpect(jsonPath("$.message").value("Product 999 not found"));
+        verifyNoInteractions(catalogEventPublisher);
     }
 
     @Test

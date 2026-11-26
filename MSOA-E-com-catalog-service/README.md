@@ -46,6 +46,24 @@ curl http://localhost:8082/products/999
 curl http://localhost:8082/products/abc
 ```
 
+## Kafka
+
+Chaque `GET /products/{id}` réussi publie de façon asynchrone un événement sur le topic `catalog-events`, avec l'identifiant du produit comme clé. Les erreurs de publication sont journalisées en WARN et ne modifient pas la réponse REST. Le broker n'est donc pas nécessaire pour lancer les tests ou consulter l'API.
+
+Pour publier les événements, un broker Kafka doit être disponible sur `localhost:9092` et le topic `catalog-events` doit exister. La publication peut être désactivée avec `catalog.kafka.enabled=false`.
+
+Format de l'événement :
+
+```json
+{"eventId":"<uuid>","type":"ProductViewed","source":"catalog","timestamp":"2026-11-25T18:30:00Z","data":{"productId":1}}
+```
+
+Pour observer les événements :
+
+```shell
+kafka-console-consumer --bootstrap-server localhost:9092 --topic catalog-events --from-beginning --property print.key=true --property key.separator=:
+```
+
 ## Images des produits
 
 Le champ `image` de chaque produit contient l'URL externe de son image. Le fichier `update-images.sql` met à jour ces URLs pour les six produits.
