@@ -7,6 +7,7 @@ const jwt = require("jsonwebtoken");
 const Database = require("better-sqlite3");
 const { randomUUID } = require("crypto");
 const { publishUserEvent } = require("./events");
+const { startRegistryClient } = require("./registry-client");
 
 const PORT = process.env.PORT || 8081;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -135,4 +136,7 @@ app.get("/api/auth/me", requireAuth, (req, res) => {
   res.json(publicUser(user));
 });
 
-app.listen(PORT, () => console.log(`Auth service sur http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Auth service sur http://localhost:${PORT}`);
+  startRegistryClient();
+});
